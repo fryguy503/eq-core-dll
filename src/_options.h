@@ -14,7 +14,7 @@ bool isEQGOverrideEnabled = false;
 // isMQInjectsEnabled if set to true will cause some edge-inspired features to work:
 // MQ2Spawns, MQ2Maps, MQ2Commands, MQ2Pulse, MQ2Spawns, MapPlugin, MQ2ItemDisplay, MQ2Labels
 // NOT RECOMMENDED. Known to cause memory leaks due to mq2maps strings
-bool isMQInjectsEnabled = false;
+bool isMQInjectsEnabled = true;
 
 // isMapWindowDisabled if set to true will do a soft patch to disable the map in game. If disabled, I suggest isMQInjectsEnabled being false as well, else npc data is still populated
 bool isMapWindowDisabled = false;
@@ -30,10 +30,10 @@ bool isHeroicDisabled = false;
 
 // isMaxHPFixEnabled if set to true allows hp beyond 10 million, this is a rare situation for custom servers
 // It also applies fixes where hp/mana/endurance state is more believed from server than client, this can cause strange status bar reports if client is out of sync
-bool isMaxHPFixEnabled = false;
+bool isMaxHPFixEnabled = true;
 
 // isPatchmeDisabled if set to true will let you double click eqgame.exe and not get the "Please run EverQuest" message, will start properly
-bool isPatchmeDisabled = false;
+bool isPatchmeDisabled = true;
 
 // isFoodDrinkSpamDisabled if set to true will stop you are hungry/thirsty messages to display on client. If server side isn't disabled, you can still get negative effects.
 bool isFoodDrinkSpamDisabled = false;
@@ -47,14 +47,14 @@ bool isSpellDataCRCEnabled = false;
 // isCombatDamageDoubleAppliedFixEnabled if set to true fixes a bug in rof2 where combat damage applied to client state is applied twice.
 // it is the main cause of players falling unconsious while the server still thinks they're alive
 // also can help with bouncing healthbar issues
-bool isCombatDamageDoubleAppliedFixEnabled = false;
+bool isCombatDamageDoubleAppliedFixEnabled = true;
 
 // isChecksumFixEnabled if set to true will override the normal checksum logic, if your server is not supporting checksums, can be left false
 bool isChecksumFixEnabled = false;
 
 // isOldModelHorseSupportEnabled if set to true enables horses while using old models
 // quality of life for those that don't enjoy Luclin models but want their benefits
-bool isOldModelHorseSupportEnabled = false;
+bool isOldModelHorseSupportEnabled = true;
 
 // isReportHardwareAddressEnabled if set to true will inspect mac addresses and send a more informative context of where EQ is running. 
 // This requires custom server side code that is not in eqemu master branch, and in majority of cases can be left false

@@ -37,7 +37,7 @@ bool title_set = false;
 bool first_maximize = true;
 bool can_fullscreen = false;
 
-bool is_digits(const std::string &str)
+bool is_digits(const std::string& str)
 {
 	return str.find_first_not_of("0123456789") == std::string::npos;
 }
@@ -69,7 +69,9 @@ ProcessGameEvents_t return_SetMouseCenter;
 DWORD d3ddev = 0;
 DWORD eqgfxMod = 0;
 BOOL bWindowedMode = true;
- 
+
+std::map<int, int> g_PlayModesMap;
+
 #define DLL_VERSION_NUMBER (uint64_t)140
 
 typedef struct _detourinfo
@@ -77,7 +79,7 @@ typedef struct _detourinfo
 	DWORD_PTR tramp;
 	DWORD_PTR detour;
 }detourinfo;
-std::map<DWORD,_detourinfo> ourdetours;
+std::map<DWORD, _detourinfo> ourdetours;
 
 
 #define FUNCTION_AT_ADDRESS(function,offset) __declspec(naked) function\
@@ -91,12 +93,12 @@ std::map<DWORD,_detourinfo> ourdetours;
 FUNCTION_AT_ADDRESS(signed int EQ_flush_mouse(), EQ_FUNCTION_flush_mouse);
 #endif
 
-void PatchA(LPVOID address, const void *dwValue, SIZE_T dwBytes) {
+void PatchA(LPVOID address, const void* dwValue, SIZE_T dwBytes) {
 	unsigned long oldProtect;
-	VirtualProtect((void *)address, dwBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
-	FlushInstructionCache(GetCurrentProcess(), (void *)address, dwBytes);
-	memcpy((void *)address, dwValue, dwBytes);
-	VirtualProtect((void *)address, dwBytes, oldProtect, &oldProtect);
+	VirtualProtect((void*)address, dwBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), (void*)address, dwBytes);
+	memcpy((void*)address, dwValue, dwBytes);
+	VirtualProtect((void*)address, dwBytes, oldProtect, &oldProtect);
 }
 
 char bMySEQDetected = 3;
@@ -110,10 +112,10 @@ DWORD IsItemDroppable = 0x5E06A0;
 DWORD GetItemValue = 0x5E0800;
 DWORD SetCCreateCameraAddr = 0x004950F0;
 DWORD SelectCharacterAddr = 0x004F1A03;
-typedef int(__fastcall *Activate_t)(CXWnd* thisptr);
-typedef int(__fastcall *ValueSellMerchant_t)(DWORD* thisptr, float a2, float a3);
-typedef int(__fastcall *SelectCharacter_t)(DWORD* thisptr, int a1, int a2, int a3);
-typedef int(__fastcall *SetCCreateCamera_t)(DWORD thisptr);
+typedef int(__fastcall* Activate_t)(CXWnd* thisptr);
+typedef int(__fastcall* ValueSellMerchant_t)(DWORD* thisptr, float a2, float a3);
+typedef int(__fastcall* SelectCharacter_t)(DWORD* thisptr, int a1, int a2, int a3);
+typedef int(__fastcall* SetCCreateCamera_t)(DWORD thisptr);
 Activate_t return_ActivateDet;
 ValueSellMerchant_t return_ValueSellMerchantDet;
 SetCCreateCamera_t return_SetCCreateCameraDet;
@@ -202,7 +204,7 @@ char __fastcall SetCCreateCameraHook(DWORD thisptr)
 		pLocalPlayer->Data.X = 0;
 		pLocalPlayer->Data.Y = 0;
 		pLocalPlayer->Data.Z = 0;
-		
+
 		//if (evil)
 		//{
 
@@ -226,7 +228,7 @@ char __fastcall SetCCreateCameraHook(DWORD thisptr)
 	return return_SetCCreateCameraDet(thisptr);;
 }
 
-int fsize(FILE *fp) {
+int fsize(FILE* fp) {
 
 	int sz = 0;
 
@@ -271,7 +273,7 @@ std::vector<std::string> splitpath(
 	return result;
 }
 
-typedef HANDLE(__stdcall *CreateFileA_t)(LPCSTR s3dFile, DWORD a2, DWORD a3, LPSECURITY_ATTRIBUTES a4, DWORD a5, DWORD a6, HANDLE hTemplateFile);
+typedef HANDLE(__stdcall* CreateFileA_t)(LPCSTR s3dFile, DWORD a2, DWORD a3, LPSECURITY_ATTRIBUTES a4, DWORD a5, DWORD a6, HANDLE hTemplateFile);
 CreateFileA_t return_CreateFileA;
 HANDLE __stdcall /*CDisplay::*/CreateFileAHook(LPCSTR s3dFile, DWORD a2, DWORD a3, LPSECURITY_ATTRIBUTES a4, DWORD a5, DWORD a6, HANDLE hTemplateFile)
 {
@@ -397,7 +399,7 @@ int __fastcall CXWndActivateHook(CXWnd* thisptr)
 }
 
 void __cdecl ResetMouseFlags() {
-	DWORD ptr = *(DWORD *)0x00809DB4;
+	DWORD ptr = *(DWORD*)0x00809DB4;
 	if (ptr)
 	{
 		*(BYTE*)(ptr + 85) = 0;
@@ -467,16 +469,16 @@ struct MacEntry_Struct {
 };
 
 struct ProcessList_Struct {
-   uint16_t opcode;
-   uint8_t count;
-   ProcessListEntry_Struct process[200];
+	uint16_t opcode;
+	uint8_t count;
+	ProcessListEntry_Struct process[200];
 };
 
 struct FileList_Struct {
 	uint16_t opcode;
 	int NumEntries;
-    ProcessListEntry_Struct Keys[200];
-    uint64_t Values[200];
+	ProcessListEntry_Struct Keys[200];
+	uint64_t Values[200];
 };
 
 enum Options {
@@ -527,13 +529,46 @@ unsigned char __cdecl SendExe_Detour(DWORD con)
 	return SendExe_Tramp(con);
 }
 
-unsigned char __fastcall HandleWorldMessage_Trampoline(DWORD *con, DWORD edx, unsigned __int32 unk, unsigned __int16 opcode, char* buf, size_t size);
-unsigned char __fastcall HandleWorldMessage_Detour(DWORD *con, DWORD edx, unsigned __int32 unk, unsigned __int16 opcode, char* buf, size_t size)
+class Receive
 {
-	return HandleWorldMessage_Trampoline(con, edx, unk, opcode, buf, size);
-}
+public:
+	unsigned char Trampoline(void* connection, unsigned int opcode, char* buf, unsigned int size);
+	unsigned char Detour(void* connection, unsigned int opcode, char* buf, unsigned int size)
+	{
+		static CHAR szBuffer[MAX_STRING] = { 0 };
 
-DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall HandleWorldMessage_Trampoline(DWORD *con, DWORD edx, unsigned __int32 unk, unsigned __int16 opcode, char* buf, size_t size));
+		switch (opcode)
+		{
+		//case 0x7777:
+		//	authorized = true;
+		//	break;
+		case 0x0971:
+		{
+			struct SpawnAppearance_Struct
+			{
+				uint16_t spawn_id;		// ID of the spawn
+				uint16_t type;			// Values associated with the type
+				uint32_t parameter;		// Type of data sent
+			};
+
+			SpawnAppearance_Struct* sas = (SpawnAppearance_Struct*)buf;
+#define SA_PLAYMODES 54
+			if (sas->type == SA_PLAYMODES) {
+				g_PlayModesMap[sas->spawn_id] = sas->parameter;
+			}
+
+			break;
+		}
+		}
+
+		return Trampoline(connection, opcode, buf, size);
+	}
+};
+
+DETOUR_TRAMPOLINE_EMPTY(unsigned char Receive::Trampoline(void*, unsigned int, char*, unsigned int));
+
+
+DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall HandleWorldMessage_Trampoline(DWORD* con, DWORD edx, unsigned __int32 unk, unsigned __int16 opcode, char* buf, size_t size));
 
 unsigned char __fastcall SendMessage_Trampoline(DWORD*, unsigned __int32, unsigned __int32, char* buf, size_t, DWORD, DWORD);
 unsigned char __fastcall SendMessage_Detour(DWORD* con, unsigned __int32 unk, unsigned __int32 channel, char* buf, size_t size, DWORD a6, DWORD a7)
@@ -618,8 +653,8 @@ DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall SetDeviceGammaRamp_Trampoline(H
 
 signed int ProcessGameEvents_Hook()
 {
-   DWORD oldTimeGetTimeVal = 0;
-   return return_ProcessGameEvents();
+	DWORD oldTimeGetTimeVal = 0;
+	return return_ProcessGameEvents();
 }
 
 void SkipLicense()
@@ -743,11 +778,11 @@ DWORD swlAddress = 0;
 DWORD uwAddress = 0;
 
 PVOID pHandler;
-bool bInitalized=false;
+bool bInitalized = false;
 
 
 // DirectXSetupGetVersion
-int __stdcall DirectXSetupGetVersion(DWORD *lpdwVersion, DWORD *lpdwMinorVersion)
+int __stdcall DirectXSetupGetVersion(DWORD* lpdwVersion, DWORD* lpdwMinorVersion)
 {
 	return 1;
 }
@@ -784,34 +819,34 @@ void InitHooks()
 	InitOptions();
 
 	DWORD var = (((DWORD)0x008C4CE0 - 0x400000) + baseAddress);
-/* 
-	if (isCpuSpeedFixEnabled) {
+	/*
+		if (isCpuSpeedFixEnabled) {
 
-		
-		CPUID cpuID(0x80000007); // Get CPU vendor
 
-		bool isCandidate = false;
-		if ((cpuID.EDX() & (1 << 8)) != 0) {
-			DebugSpew("cpu has CMPXCHG8 enabled"); //https://en.wikipedia.org/wiki/CPUID CMPXCHG8 bitflag 8 on edx
-			isCandidate = true;
-		}
+			CPUID cpuID(0x80000007); // Get CPU vendor
 
-		if (isCandidate && CalcCpuTicks_x && frequency_x) {
-			DebugSpew("cpu speed fix needed, applying trampoline");
-			CalcCpuTicks = FixOffset(CalcCpuTicks_x);
-			freq = reinterpret_cast<uint64_t*>(FixOffset(frequency_x)); // offset to low part of 64 bit var
-
-			// race here, hook CalcCpuTicks if we're early
-			// don't allow this to change in game because it will cause a freeze
-			EzDetourwName(CalcCpuTicks, &CalcCpuTicks_Detour, &CalcCpuTicks_Trampoline, "MQ2CpuSpeedFix_CalcCpuTicks");
-			if (gGameState != GAMESTATE_CHARSELECT && gGameState != GAMESTATE_INGAME) {
-				adjustFreq();
+			bool isCandidate = false;
+			if ((cpuID.EDX() & (1 << 8)) != 0) {
+				DebugSpew("cpu has CMPXCHG8 enabled"); //https://en.wikipedia.org/wiki/CPUID CMPXCHG8 bitflag 8 on edx
+				isCandidate = true;
 			}
-		}
-		else {
-			DebugSpew("cpu is not candidate for speed fix");
-		}
-	} */
+
+			if (isCandidate && CalcCpuTicks_x && frequency_x) {
+				DebugSpew("cpu speed fix needed, applying trampoline");
+				CalcCpuTicks = FixOffset(CalcCpuTicks_x);
+				freq = reinterpret_cast<uint64_t*>(FixOffset(frequency_x)); // offset to low part of 64 bit var
+
+				// race here, hook CalcCpuTicks if we're early
+				// don't allow this to change in game because it will cause a freeze
+				EzDetourwName(CalcCpuTicks, &CalcCpuTicks_Detour, &CalcCpuTicks_Trampoline, "MQ2CpuSpeedFix_CalcCpuTicks");
+				if (gGameState != GAMESTATE_CHARSELECT && gGameState != GAMESTATE_INGAME) {
+					adjustFreq();
+				}
+			}
+			else {
+				DebugSpew("cpu is not candidate for speed fix");
+			}
+		} */
 	if (isHeroicDisabled) {
 		DebugSpew("disabling heroic stats");
 		var = (((DWORD)0x0044410C - 0x400000) + baseAddress);
@@ -835,7 +870,7 @@ void InitHooks()
 	}
 
 	var = (((DWORD)0x004C3250 - 0x400000) + baseAddress);
-	EzDetour((DWORD)var, HandleWorldMessage_Detour, HandleWorldMessage_Trampoline);
+	EzDetour(var, &Receive::Detour, &Receive::Trampoline);
 
 	if (isSpellDataCRCEnabled) {
 		DebugSpew("enabling spell data crc");
@@ -967,14 +1002,14 @@ void InitHooks()
 		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90",35);
 
 		var = (((DWORD)0x00709AC1 - 0x400000) + baseAddress); // Nop the gamma slider
-		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\xE9\xD0\x00\x90", 10); 
+		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\xE9\xD0\x00\x90", 10);
 	}*/
-	
+
 }
 
 void ExitHooks()
 {
-	if(!bInitalized)
+	if (!bInitalized)
 	{
 		return;
 	}
@@ -983,131 +1018,131 @@ void ExitHooks()
 }
 BOOL ParseINIFile(PCHAR lpINIPath)
 {
-   CHAR Filename[MAX_STRING] = {0};
-   CHAR MQChatSettings[MAX_STRING] = {0};
-   CHAR CustomSettings[MAX_STRING] = {0};
-   CHAR ClientINI[MAX_STRING] = {0};
-   CHAR szBuffer[MAX_STRING] = {0};
-   CHAR ClientName[MAX_STRING] = {0};
-   CHAR FilterList[MAX_STRING * 10] = {0};
-   GetEQPath(gszEQPath);
+	CHAR Filename[MAX_STRING] = { 0 };
+	CHAR MQChatSettings[MAX_STRING] = { 0 };
+	CHAR CustomSettings[MAX_STRING] = { 0 };
+	CHAR ClientINI[MAX_STRING] = { 0 };
+	CHAR szBuffer[MAX_STRING] = { 0 };
+	CHAR ClientName[MAX_STRING] = { 0 };
+	CHAR FilterList[MAX_STRING * 10] = { 0 };
+	GetEQPath(gszEQPath);
 
-   sprintf(Filename, "%s\\Edge.ini", lpINIPath);
-   sprintf(ClientINI, "%s\\eqgame.ini", lpINIPath);
-   strcpy(gszINIFilename, Filename);
+	sprintf(Filename, "%s\\Edge.ini", lpINIPath);
+	sprintf(ClientINI, "%s\\eqgame.ini", lpINIPath);
+	strcpy(gszINIFilename, Filename);
 
-   DebugSpew("Expected Client version: %s %s", __ExpectedVersionDate,
-             __ExpectedVersionTime);
-   DebugSpew("    Real Client version: %s %s", __ActualVersionDate, __ActualVersionTime);
+	DebugSpew("Expected Client version: %s %s", __ExpectedVersionDate,
+		__ExpectedVersionTime);
+	DebugSpew("    Real Client version: %s %s", __ActualVersionDate, __ActualVersionTime);
 
-   // note: __ClientOverride is always #defined as 1 or 0
+	// note: __ClientOverride is always #defined as 1 or 0
 #if (!__ClientOverride)
-   if (strncmp(__ExpectedVersionDate, (const char*)__ActualVersionDate,
-               strlen(__ExpectedVersionDate)) ||
-       strncmp(__ExpectedVersionTime, (const char*)__ActualVersionTime,
-               strlen(__ExpectedVersionTime))) {
-      MessageBox(NULL, "Incorrect client version", "Edge", MB_OK);
-      return FALSE;
-   }
+	if (strncmp(__ExpectedVersionDate, (const char*)__ActualVersionDate,
+		strlen(__ExpectedVersionDate)) ||
+		strncmp(__ExpectedVersionTime, (const char*)__ActualVersionTime,
+			strlen(__ExpectedVersionTime))) {
+		MessageBox(NULL, "Incorrect client version", "Edge", MB_OK);
+		return FALSE;
+	}
 #endif
 
-      gbAlwaysDrawMQHUD = false;
-   gbHUDUnderUI = false;
+	gbAlwaysDrawMQHUD = false;
+	gbHUDUnderUI = false;
 
-   DefaultFilters();
+	DefaultFilters();
 
-   return TRUE;
+	return TRUE;
 }
 
 
 bool __cdecl MQ2Initialize()
 {
-   if (!InitOffsets()) {
-      DebugSpewAlways("InitOffsets returned false - thread aborted.");
-      g_Loaded = FALSE;
-      return false;
-   }
+	if (!InitOffsets()) {
+		DebugSpewAlways("InitOffsets returned false - thread aborted.");
+		g_Loaded = FALSE;
+		return false;
+	}
 
-   if (!ParseINIFile("eqclient.ini")) {
-      DebugSpewAlways("ParseINIFile returned false - thread aborted.");
-      g_Loaded = FALSE;
-      return false;
-   }
-   srand((unsigned int)time(0));
-   ZeroMemory(gDiKeyName, sizeof(gDiKeyName));
-   unsigned long i;
-   for (i = 0; gDiKeyID[i].Id; i++) {
-      gDiKeyName[gDiKeyID[i].Id] = gDiKeyID[i].szName;
-   }
+	if (!ParseINIFile("eqclient.ini")) {
+		DebugSpewAlways("ParseINIFile returned false - thread aborted.");
+		g_Loaded = FALSE;
+		return false;
+	}
+	srand((unsigned int)time(0));
+	ZeroMemory(gDiKeyName, sizeof(gDiKeyName));
+	unsigned long i;
+	for (i = 0; gDiKeyID[i].Id; i++) {
+		gDiKeyName[gDiKeyID[i].Id] = gDiKeyID[i].szName;
+	}
 
-   ZeroMemory(szEQMappableCommands, sizeof(szEQMappableCommands));
-   for (i = 0; i < nEQMappableCommands; i++) {
-      if ((DWORD)EQMappableCommandList[i] == 0 ||
-          (DWORD)EQMappableCommandList[i] > (DWORD)__AC1_Data)
-         continue;
-      szEQMappableCommands[i] = EQMappableCommandList[i];
-   }
-   gnNormalEQMappableCommands = i;
+	ZeroMemory(szEQMappableCommands, sizeof(szEQMappableCommands));
+	for (i = 0; i < nEQMappableCommands; i++) {
+		if ((DWORD)EQMappableCommandList[i] == 0 ||
+			(DWORD)EQMappableCommandList[i] > (DWORD)__AC1_Data)
+			continue;
+		szEQMappableCommands[i] = EQMappableCommandList[i];
+	}
+	gnNormalEQMappableCommands = i;
 
-   // as long nEQMappableCommands is right and these remain at the end, these
-   // should never need updating who uses the unknowns anyway? - ieatacid
-   szEQMappableCommands[nEQMappableCommands - 23] = "UNKNOWN0x10d";
-   szEQMappableCommands[nEQMappableCommands - 22] = "UNKNOWN0x10e";
-   szEQMappableCommands[nEQMappableCommands - 21] = "UNKNOWN0x10f";
-   szEQMappableCommands[nEQMappableCommands - 20] = "UNKNOWN0x110";
-   szEQMappableCommands[nEQMappableCommands - 19] = "CHAT_SEMICOLON";
-   szEQMappableCommands[nEQMappableCommands - 18] = "CHAT_SLASH";
-   szEQMappableCommands[nEQMappableCommands - 17] = "UNKNOWN0x113";
-   szEQMappableCommands[nEQMappableCommands - 16] = "UNKNOWN0x114";
-   szEQMappableCommands[nEQMappableCommands - 15] = "INSTANT_CAMP";
-   szEQMappableCommands[nEQMappableCommands - 14] = "UNKNOWN0x116";
-   szEQMappableCommands[nEQMappableCommands - 13] = "UNKNOWN0x117";
-   szEQMappableCommands[nEQMappableCommands - 12] = "CHAT_EMPTY";
-   szEQMappableCommands[nEQMappableCommands - 11] = "TOGGLE_WINDOWMODE";
-   szEQMappableCommands[nEQMappableCommands - 10] = "UNKNOWN0x11a";
-   szEQMappableCommands[nEQMappableCommands - 9] = "UNKNOWN0x11b";
-   szEQMappableCommands[nEQMappableCommands - 8] =
-      "CHANGEFACE"; // maybe? something that requires models.
-   szEQMappableCommands[nEQMappableCommands - 7] = "UNKNOWN0x11d";
-   szEQMappableCommands[nEQMappableCommands - 6] = "UNKNOWN0x11e";
-   szEQMappableCommands[nEQMappableCommands - 5] = "UNKNOWN0x11f";
-   szEQMappableCommands[nEQMappableCommands - 4] = "UNKNOWN0x120";
-   szEQMappableCommands[nEQMappableCommands - 3] = "UNKNOWN0x121";
-   szEQMappableCommands[nEQMappableCommands - 2] = "UNKNOWN0x122";
-   szEQMappableCommands[nEQMappableCommands - 1] = "UNKNOWN0x123";
+	// as long nEQMappableCommands is right and these remain at the end, these
+	// should never need updating who uses the unknowns anyway? - ieatacid
+	szEQMappableCommands[nEQMappableCommands - 23] = "UNKNOWN0x10d";
+	szEQMappableCommands[nEQMappableCommands - 22] = "UNKNOWN0x10e";
+	szEQMappableCommands[nEQMappableCommands - 21] = "UNKNOWN0x10f";
+	szEQMappableCommands[nEQMappableCommands - 20] = "UNKNOWN0x110";
+	szEQMappableCommands[nEQMappableCommands - 19] = "CHAT_SEMICOLON";
+	szEQMappableCommands[nEQMappableCommands - 18] = "CHAT_SLASH";
+	szEQMappableCommands[nEQMappableCommands - 17] = "UNKNOWN0x113";
+	szEQMappableCommands[nEQMappableCommands - 16] = "UNKNOWN0x114";
+	szEQMappableCommands[nEQMappableCommands - 15] = "INSTANT_CAMP";
+	szEQMappableCommands[nEQMappableCommands - 14] = "UNKNOWN0x116";
+	szEQMappableCommands[nEQMappableCommands - 13] = "UNKNOWN0x117";
+	szEQMappableCommands[nEQMappableCommands - 12] = "CHAT_EMPTY";
+	szEQMappableCommands[nEQMappableCommands - 11] = "TOGGLE_WINDOWMODE";
+	szEQMappableCommands[nEQMappableCommands - 10] = "UNKNOWN0x11a";
+	szEQMappableCommands[nEQMappableCommands - 9] = "UNKNOWN0x11b";
+	szEQMappableCommands[nEQMappableCommands - 8] =
+		"CHANGEFACE"; // maybe? something that requires models.
+	szEQMappableCommands[nEQMappableCommands - 7] = "UNKNOWN0x11d";
+	szEQMappableCommands[nEQMappableCommands - 6] = "UNKNOWN0x11e";
+	szEQMappableCommands[nEQMappableCommands - 5] = "UNKNOWN0x11f";
+	szEQMappableCommands[nEQMappableCommands - 4] = "UNKNOWN0x120";
+	szEQMappableCommands[nEQMappableCommands - 3] = "UNKNOWN0x121";
+	szEQMappableCommands[nEQMappableCommands - 2] = "UNKNOWN0x122";
+	szEQMappableCommands[nEQMappableCommands - 1] = "UNKNOWN0x123";
 
-   for (nColorAdjective = 0; szColorAdjective[nColorAdjective]; nColorAdjective++) {
-   }
-   for (nColorAdjectiveYou = 0; szColorAdjectiveYou[nColorAdjectiveYou];
-        nColorAdjectiveYou++) {
-   }
-   for (nColorExpletive = 0; szColorExpletive[nColorExpletive]; nColorExpletive++) {
-   }
-   for (nColorSyntaxError = 0; szColorSyntaxError[nColorSyntaxError];
-        nColorSyntaxError++) {
-   }
-   for (nColorMacroError = 0; szColorMacroError[nColorMacroError]; nColorMacroError++) {
-   }
-   for (nColorMQ2DataError = 0; szColorMQ2DataError[nColorMQ2DataError];
-        nColorMQ2DataError++) {
-   }
-   for (nColorFatalError = 0; szColorFatalError[nColorFatalError]; nColorFatalError++) {
-   }
+	for (nColorAdjective = 0; szColorAdjective[nColorAdjective]; nColorAdjective++) {
+	}
+	for (nColorAdjectiveYou = 0; szColorAdjectiveYou[nColorAdjectiveYou];
+		nColorAdjectiveYou++) {
+	}
+	for (nColorExpletive = 0; szColorExpletive[nColorExpletive]; nColorExpletive++) {
+	}
+	for (nColorSyntaxError = 0; szColorSyntaxError[nColorSyntaxError];
+		nColorSyntaxError++) {
+	}
+	for (nColorMacroError = 0; szColorMacroError[nColorMacroError]; nColorMacroError++) {
+	}
+	for (nColorMQ2DataError = 0; szColorMQ2DataError[nColorMQ2DataError];
+		nColorMQ2DataError++) {
+	}
+	for (nColorFatalError = 0; szColorFatalError[nColorFatalError]; nColorFatalError++) {
+	}
 #ifndef ISXEQ
-   InitializeParser();
+	InitializeParser();
 #endif
-   InitializeMQ2Detours();
-   if (isMQInjectsEnabled) {
-	DebugSpew("initializing mq2 hooks");
-	InitializeDisplayHook();
-	InitializeChatHook();
-	InitializeMQ2Spawns();
-	InitializeMQ2Pulse();
-	InitializeMQ2Commands();
-	InitializeMapPlugin();
-	// InitializeMQ2KeyBinds();
-   }
-   return true;
+	InitializeMQ2Detours();
+	if (isMQInjectsEnabled) {
+		DebugSpew("initializing mq2 hooks");
+		InitializeDisplayHook();
+		InitializeChatHook();
+		InitializeMQ2Spawns();
+		InitializeMQ2Pulse();
+		InitializeMQ2Commands();
+		InitializeMapPlugin();
+		// InitializeMQ2KeyBinds();
+	}
+	return true;
 }
 
 
@@ -1117,12 +1152,12 @@ bool __cdecl MQ2Initialize()
 // ***************************************************************************
 DWORD WINAPI MQ2Start()
 {
-   PCHAR lpINIPath = "";
-   strcpy(gszINIPath, lpINIPath);
-   CHAR szBuffer[MAX_STRING] = {0};
+	PCHAR lpINIPath = "";
+	strcpy(gszINIPath, lpINIPath);
+	CHAR szBuffer[MAX_STRING] = { 0 };
 
-   if (!MQ2Initialize()) return 1;
-   return 0;
+	if (!MQ2Initialize()) return 1;
+	return 0;
 }
 
 // dinput8.cpp : Defines the exported functions for the DLL application.
@@ -1139,125 +1174,125 @@ DllUnregisterServerProc m_pDllUnregisterServer;
 GetdfDIJoystickProc m_pGetdfDIJoystick;
 bool WINAPI DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
-   static HMODULE dinput8dll = nullptr;
-   CHAR szFilename[MAX_STRING] = {0};
+	static HMODULE dinput8dll = nullptr;
+	CHAR szFilename[MAX_STRING] = { 0 };
 
-   switch (dwReason) {
-   case DLL_PROCESS_ATTACH:
-	   // Load dll
-	   char path[MAX_PATH];
-	   GetSystemDirectoryA(path, MAX_PATH);
-	   strcat_s(path, "\\dinput8.dll");
-	   dinput8dll = LoadLibraryA(path);
+	switch (dwReason) {
+	case DLL_PROCESS_ATTACH:
+		// Load dll
+		char path[MAX_PATH];
+		GetSystemDirectoryA(path, MAX_PATH);
+		strcat_s(path, "\\dinput8.dll");
+		dinput8dll = LoadLibraryA(path);
 
-	   PCHAR szProcessName;
-	   ghModule = (HMODULE)hModule;
-	   ghInstance = (HINSTANCE)hModule;
+		PCHAR szProcessName;
+		ghModule = (HMODULE)hModule;
+		ghInstance = (HINSTANCE)hModule;
 
-	   GetModuleFileName(ghModule, szFilename, MAX_STRING);
-	   szProcessName = strrchr(szFilename, '\\');
-	   szProcessName[0] = '\0';
-	   strcat(szFilename, "\\eqgame.ini");
+		GetModuleFileName(ghModule, szFilename, MAX_STRING);
+		szProcessName = strrchr(szFilename, '\\');
+		szProcessName[0] = '\0';
+		strcat(szFilename, "\\eqgame.ini");
 
-	   GetModuleFileName(NULL, szFilename, MAX_STRING);
+		GetModuleFileName(NULL, szFilename, MAX_STRING);
 
-	   szProcessName = strrchr(szFilename, '.');
-	   szProcessName[0] = '\0';
-	   szProcessName = strrchr(szFilename, '\\') + 1;
-	  InitHooks();
-	   // remove full information about my command line
-	 // memset(&pbi.PebBaseAddress->ProcessParameters->ImagePathName.Buffer, 0, pbi.PebBaseAddress->ProcessParameters->ImagePathName.Length);
+		szProcessName = strrchr(szFilename, '.');
+		szProcessName[0] = '\0';
+		szProcessName = strrchr(szFilename, '\\') + 1;
+		InitHooks();
+		// remove full information about my command line
+	  // memset(&pbi.PebBaseAddress->ProcessParameters->ImagePathName.Buffer, 0, pbi.PebBaseAddress->ProcessParameters->ImagePathName.Length);
 
 
-	   // Get function addresses
-	   m_pDirectInput8Create =
-		   (DirectInput8CreateProc)GetProcAddress(dinput8dll,
-			   "DirectInput8Create");
-	   m_pDllCanUnloadNow =
-		   (DllCanUnloadNowProc)GetProcAddress(dinput8dll, "DllCanUnloadNow");
-	   m_pDllGetClassObject =
-		   (DllGetClassObjectProc)GetProcAddress(dinput8dll, "DllGetClassObject");
-	   m_pDllRegisterServer =
-		   (DllRegisterServerProc)GetProcAddress(dinput8dll, "DllRegisterServer");
-	   m_pDllUnregisterServer =
-		   (DllUnregisterServerProc)GetProcAddress(dinput8dll,
-			   "DllUnregisterServer");
-	   m_pGetdfDIJoystick =
-		   (GetdfDIJoystickProc)GetProcAddress(dinput8dll, "GetdfDIJoystick");
-	   break;
+		// Get function addresses
+		m_pDirectInput8Create =
+			(DirectInput8CreateProc)GetProcAddress(dinput8dll,
+				"DirectInput8Create");
+		m_pDllCanUnloadNow =
+			(DllCanUnloadNowProc)GetProcAddress(dinput8dll, "DllCanUnloadNow");
+		m_pDllGetClassObject =
+			(DllGetClassObjectProc)GetProcAddress(dinput8dll, "DllGetClassObject");
+		m_pDllRegisterServer =
+			(DllRegisterServerProc)GetProcAddress(dinput8dll, "DllRegisterServer");
+		m_pDllUnregisterServer =
+			(DllUnregisterServerProc)GetProcAddress(dinput8dll,
+				"DllUnregisterServer");
+		m_pGetdfDIJoystick =
+			(GetdfDIJoystickProc)GetProcAddress(dinput8dll, "GetdfDIJoystick");
+		break;
 
-   case DLL_PROCESS_DETACH:
-	   CoUninitialize();
-	   FreeLibrary(dinput8dll);
-	   break;
-   }
+	case DLL_PROCESS_DETACH:
+		CoUninitialize();
+		FreeLibrary(dinput8dll);
+		break;
+	}
 
-   return true;
+	return true;
 }
 
 HRESULT WINAPI DirectInput8Create(HINSTANCE hinst, DWORD dwVersion, REFIID riidltf,
-                                  LPVOID* ppvOut, LPUNKNOWN punkOuter)
+	LPVOID* ppvOut, LPUNKNOWN punkOuter)
 {
-   if (!m_pDirectInput8Create) {
-      return E_FAIL;
-   }
+	if (!m_pDirectInput8Create) {
+		return E_FAIL;
+	}
 
-   HRESULT hr = m_pDirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter);
+	HRESULT hr = m_pDirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter);
 
-   if (SUCCEEDED(hr)) {
-      genericQueryInterface(riidltf, ppvOut);
-   }
+	if (SUCCEEDED(hr)) {
+		genericQueryInterface(riidltf, ppvOut);
+	}
 
-   return hr;
+	return hr;
 }
 
 HRESULT WINAPI DllCanUnloadNow()
 {
-   if (!m_pDllCanUnloadNow) {
-      return E_FAIL;
-   }
+	if (!m_pDllCanUnloadNow) {
+		return E_FAIL;
+	}
 
-   return m_pDllCanUnloadNow();
+	return m_pDllCanUnloadNow();
 }
 
 HRESULT WINAPI DllGetClassObject(IN REFCLSID rclsid, IN REFIID riid, OUT LPVOID FAR* ppv)
 {
-   if (!m_pDllGetClassObject) {
-      return E_FAIL;
-   }
+	if (!m_pDllGetClassObject) {
+		return E_FAIL;
+	}
 
-   HRESULT hr = m_pDllGetClassObject(rclsid, riid, ppv);
+	HRESULT hr = m_pDllGetClassObject(rclsid, riid, ppv);
 
-   if (SUCCEEDED(hr)) {
-      genericQueryInterface(riid, ppv);
-   }
+	if (SUCCEEDED(hr)) {
+		genericQueryInterface(riid, ppv);
+	}
 
-   return hr;
+	return hr;
 }
 
 HRESULT WINAPI DllRegisterServer()
 {
-   if (!m_pDllRegisterServer) {
-      return E_FAIL;
-   }
+	if (!m_pDllRegisterServer) {
+		return E_FAIL;
+	}
 
-   return m_pDllRegisterServer();
+	return m_pDllRegisterServer();
 }
 
 HRESULT WINAPI DllUnregisterServer()
 {
-   if (!m_pDllUnregisterServer) {
-      return E_FAIL;
-   }
+	if (!m_pDllUnregisterServer) {
+		return E_FAIL;
+	}
 
-   return m_pDllUnregisterServer();
+	return m_pDllUnregisterServer();
 }
 
 LPCDIDATAFORMAT WINAPI GetdfDIJoystick()
 {
-   if (!m_pGetdfDIJoystick) {
-      return nullptr;
-   }
+	if (!m_pGetdfDIJoystick) {
+		return nullptr;
+	}
 
-   return m_pGetdfDIJoystick();
+	return m_pGetdfDIJoystick();
 }
