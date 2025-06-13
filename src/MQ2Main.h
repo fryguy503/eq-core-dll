@@ -309,6 +309,7 @@ LEGACY_API VOID InitializeMapPlugin();
 void         HandleEdgeDPSDeath(EdgeDPSEntry entry);
 EdgeDPSEntry GetEdgeDPSEntryByID(DWORD id, bool bAdd = true);
 void SetEdgeDPSEntryByID(DWORD id, EdgeDPSEntry entry);
+PLUGIN_API char* MakeAuthPacket();
 PLUGIN_API VOID SetMapGameState(DWORD GameState);
 LEGACY_API VOID InitializeMQ2ItemDisplay();
 LEGACY_API VOID InitializeMQ2Labels();
@@ -631,3 +632,9 @@ LEGACY_API BOOL Calculate(PCHAR szFormula, DOUBLE& Dest);
 EQLIB_API VOID memchecks_tramp(PCHAR,DWORD,PVOID,DWORD,BOOL); 
 EQLIB_API VOID memchecks(PCHAR,DWORD,PVOID,DWORD,BOOL);
 
+class SendMessageHook
+{
+public:
+    bool Trampoline(unsigned __int32 channel, char* buf, int size);
+    bool Detour(unsigned __int32 channel, char* buf, int size);
+};

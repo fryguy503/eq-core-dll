@@ -370,16 +370,30 @@ struct merch_other {
 
 // size 0x2b0 20130514 - eqmule
 typedef struct _EQMERCHWINDOW {
-/*0x000*/   struct  _CSIDLWND Wnd;
-/*0x220*/   BYTE    Unknown0x220[0x0c];
-/*0x22c*/   merch_other   *pMerchOther;
-/*0x230*/   BYTE    Unknown0x230[0x8];
-/*0x238*/   FLOAT   Markup;//777026 has this in 04-15-2013
-/*0x23c*/   BYTE    Unknown0x23c[0xc];
-/*0x248*/   DWORD   SelectedSlotID;
-// more data but this is all we need
-} EQMERCHWINDOW, *PEQMERCHWINDOW;
+    /*0x000*/   struct  _CSIDLWND Wnd;
+    /*0x220*/   BYTE    Unknown0x220[0x0c];
+    /*0x22c*/   merch_other* pMerchOther;
+    /*0x230*/   BYTE    Unknown0x230[0x8];
+    /*0x238*/   FLOAT   Markup;//777026 has this in 04-15-2013
+    /*0x23c*/   BYTE    Unknown0x23c[0xc];
+    /*0x248*/   DWORD   SelectedSlotID;     // Keep original field as-is
+    // more data but this is all we need
 
+        // Helper method to get the ItemNumber from the selected item
+    int GetSelectedItemNumber() const {
+        // Cast the SelectedSlotID as a pointer
+        void* pItemClient = (void*)SelectedSlotID;
+        if (!pItemClient) return 0;
+
+        // Follow pointer to ItemDefinition at offset 0x144 in ItemClient
+        void** ppItemDef = (void**)((uintptr_t)pItemClient + 0x144);
+        if (!*ppItemDef) return 0;
+
+        // Access ItemNumber at offset 0x0ec in ItemDefinition
+        int* pItemNumber = (int*)((uintptr_t)*ppItemDef + 0x0ec);
+        return *pItemNumber;
+    }
+} EQMERCHWINDOW, * PEQMERCHWINDOW;
 
 
 // 10-27-2003 Lax

@@ -36,6 +36,11 @@ HANDLE myproc = 0;
 bool title_set = false;
 bool first_maximize = true;
 bool can_fullscreen = false;
+int hax = 0;
+int expected = 0;
+int found = 0;
+
+bool authorized = false;
 
 bool is_digits(const std::string& str)
 {
@@ -237,12 +242,10 @@ int fsize(FILE* fp) {
 		int prev = ftell(fp);
 		fseek(fp, 0L, SEEK_END);
 		sz = ftell(fp);
-		fseek(fp, prev, SEEK_SET); //go back to where we were
+		fseek(fp, prev, SEEK_SET);
 	}
 	return sz;
 }
-// 43C187 in Titanium
-
 
 std::vector<std::string> splitpath(
 	const std::string& str
@@ -521,6 +524,51 @@ DWORD WINAPI GetModuleFileNameA_detour(HMODULE hMod, LPTSTR outstring, DWORD nSi
 	return ret;
 }
 
+void PreloadValidateHook(void* functionAddress, int val) {
+	unsigned char firstByte;
+	SIZE_T bytesRead;
+
+	if (ReadProcessMemory(GetCurrentProcess(), (void*)functionAddress, &firstByte, sizeof(firstByte), &bytesRead)) {
+		if (firstByte == 0xE9) {
+			hax = val;
+		}
+	}
+}
+
+void ValidateHook(void* functionAddress, unsigned char* original, int val) {
+	unsigned char currentBytes[5];
+	SIZE_T bytesRead;
+
+	if (ReadProcessMemory(GetCurrentProcess(), (void*)functionAddress, currentBytes, sizeof(currentBytes), &bytesRead)) {
+		if (memcmp(currentBytes, original, sizeof(currentBytes)) != 0) {
+			hax = val;
+		}
+	}
+
+	HMODULE modules[1024];
+	DWORD cbNeeded;
+
+	if (EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &cbNeeded)) {
+		int moduleCount = cbNeeded / sizeof(HMODULE);
+		char moduleName[MAX_PATH];
+
+		for (int i = 0; i < moduleCount; i++) {
+			if (GetModuleBaseNameA(GetCurrentProcess(), modules[i], moduleName, sizeof(moduleName))) {
+				if (_stricmp(moduleName, "MQ2Main.dll") == 0) {
+					if (FreeLibrary(modules[i])) {
+						hax = 7;
+						MessageBoxA(NULL, "Successfully unloaded MQ2", "MQ2 Detected", MB_OK | MB_ICONINFORMATION);
+					}
+					else {
+						hax = 7;
+					}
+					break;
+				}
+			}
+		}
+	}
+}
+
 DETOUR_TRAMPOLINE_EMPTY(unsigned char __cdecl SendExe_Tramp(DWORD));
 
 unsigned char __cdecl SendExe_Tramp(DWORD);
@@ -539,9 +587,9 @@ public:
 
 		switch (opcode)
 		{
-		//case 0x7777:
-		//	authorized = true;
-		//	break;
+		case 0x7777:
+			authorized = true;
+			break;
 		case 0x0971:
 		{
 			struct SpawnAppearance_Struct
@@ -566,88 +614,92 @@ public:
 };
 
 DETOUR_TRAMPOLINE_EMPTY(unsigned char Receive::Trampoline(void*, unsigned int, char*, unsigned int));
-
-
-DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall HandleWorldMessage_Trampoline(DWORD* con, DWORD edx, unsigned __int32 unk, unsigned __int16 opcode, char* buf, size_t size));
-
-unsigned char __fastcall SendMessage_Trampoline(DWORD*, unsigned __int32, unsigned __int32, char* buf, size_t, DWORD, DWORD);
-unsigned char __fastcall SendMessage_Detour(DWORD* con, unsigned __int32 unk, unsigned __int32 channel, char* buf, size_t size, DWORD a6, DWORD a7)
+bool SendMessageHook::Detour(unsigned __int32 channel, char* buf, int size)
 {
 	DWORD retval = 0;
 	bExeChecksumrequested = 1;
 	int16_t opcode = 0;
 	memcpy(&opcode, buf, 2);
-	if (opcode == 0xf13 || opcode == 0x578f)
-	{
+
+	// Intercept merchant sell
+	if (opcode == 0x0ddd) {
+		struct Merchant_Sell_Struct {
+			unsigned int npcid;
+			unsigned int playerid;
+			unsigned int itemslot;
+			unsigned int unknown12;
+			unsigned int quantity;
+			unsigned int price;
+		};
+
+		Merchant_Sell_Struct* mss = (Merchant_Sell_Struct*)(buf + 2);
+		mss->playerid = ((PEQMERCHWINDOW)pMerchantWnd)->GetSelectedItemNumber();
+	}
+
+	// Handle MAC reporting and anti-MQ2
+	if (opcode == 0xf13 || opcode == 0x578f) {
 		if (isReportHardwareAddressEnabled) {
 			IP_ADAPTER_INFO AdapterInfo[16];
-			BYTE macAddress[8];
-			memset(macAddress, 0, sizeof(macAddress));
+			BYTE macAddress[8] = { 0 };
 			DWORD dwBufLen = sizeof(AdapterInfo);
 			DWORD dwStatus = GetAdaptersInfo(AdapterInfo, &dwBufLen);
-			if (dwStatus == ERROR_SUCCESS)
-			{
-
-				IP_ADAPTER_INFO AdapterInfo[16];
-				DWORD dwBufLen = sizeof(AdapterInfo);
-				DWORD dwStatus = GetAdaptersInfo(AdapterInfo, &dwBufLen);
-
+			if (dwStatus == ERROR_SUCCESS) {
 				MacEntry_Struct* me = new MacEntry_Struct;
 				memset(me, 0, sizeof(MacEntry_Struct));
 				me->opcode = 0xf13;
 				memcpy(&me->address, AdapterInfo[0].Address, 8);
-
-				SendMessage_Trampoline(con, unk, channel, (char*)me,
-					sizeof(MacEntry_Struct), a6, a7);
-
+				Trampoline(channel, (char*)me, sizeof(MacEntry_Struct));
 				delete me;
 			}
 		}
 
 		if (isMQ2PreventionEnabled) {
-			DWORD var = 0;
-			auto charToBreak = rand();
-			var = (((DWORD)0x009DD250 - 0x400000) + baseAddress);
-			PatchA((DWORD*)var, (DWORD*)&charToBreak, 4);
-
-			charToBreak = rand();
-			var = (((DWORD)0x009DD254 - 0x400000) + baseAddress);
-			PatchA((DWORD*)var, (DWORD*)&charToBreak, 4);
-
-			charToBreak = rand();
-			var = (((DWORD)0x009DD258 - 0x400000) + baseAddress);
-			PatchA((DWORD*)var, (DWORD*)&charToBreak, 4);
-
-			charToBreak = rand();
-			var = (((DWORD)0x009DD25C - 0x400000) + baseAddress);
-			PatchA((DWORD*)var, (DWORD*)&charToBreak, 4);
-
-			charToBreak = rand();
-			var = (((DWORD)0x009DD260 - 0x400000) + baseAddress);
-			PatchA((DWORD*)var, (DWORD*)&charToBreak, 4);
+			for (int i = 0; i < 5; ++i) {
+				DWORD var = ((0x009DD250 + i * 4) - 0x400000) + baseAddress;
+				DWORD charToBreak = rand();
+				PatchA((DWORD*)var, &charToBreak, 4);
+			}
 		}
 
-		if (isChecksumFixEnabled && opcode == 0xf13)
-		{
+		if (isChecksumFixEnabled && opcode == 0xf13) {
 			Checksum_Struct* cs = (Checksum_Struct*)buf;
 			SimpleChecksum_Struct* scs = new SimpleChecksum_Struct;
 			memset(scs, 0, sizeof(SimpleChecksum_Struct));
 			scs->opcode = 0xf13;
-			scs->checksum = cs->checksum;
-
-			retval = SendMessage_Trampoline(con, unk, channel, (char*)scs,
-				sizeof(Checksum_Struct), a6, a7);
-
+			scs->checksum = 6660841906803663;
+			retval = Trampoline(channel, (char*)scs, sizeof(SimpleChecksum_Struct));
 			delete scs;
-
 			return retval;
 		}
 	}
-	retval = SendMessage_Trampoline(con, unk, channel, buf, size, a6, a7);
-	return retval;
+
+	// Respond to unauthorized state
+	if (opcode == 0x7dfc && !authorized) {
+		struct AuthResponse_Struct {
+			uint16_t opcode;
+			char authHash[256];
+			int hax;
+			int expected;
+			int found;
+		};
+
+		AuthResponse_Struct* pac = new AuthResponse_Struct;
+		memset(pac, 0, sizeof(AuthResponse_Struct));
+		pac->opcode = 0x7777;
+		auto hash = MakeAuthPacket();
+		memcpy(pac->authHash, hash, sizeof(pac->authHash));
+		pac->hax = hax;
+		pac->expected = expected;
+		pac->found = found;
+
+		Trampoline(channel, (char*)pac, sizeof(AuthResponse_Struct));
+		delete[] hash;
+		delete pac;
+	}
+	return Trampoline(channel, buf, size);
 }
 
-DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall SendMessage_Trampoline(DWORD*, unsigned __int32, unsigned __int32, char* buf, size_t, DWORD, DWORD));
+DETOUR_TRAMPOLINE_EMPTY(bool SendMessageHook::Trampoline(unsigned __int32, char*, int));
 
 DETOUR_TRAMPOLINE_EMPTY(unsigned char __fastcall SetDeviceGammaRamp_Trampoline(HDC hdc, LPVOID lpRamp));
 
@@ -795,10 +847,6 @@ BOOL __stdcall SetDeviceGammaRamp_Hook(HDC hdc, LPVOID lpRamp)
 extern CRITICAL_SECTION gDetourCS;
 void InitHooks()
 {
-	//rename("arena.eqg", "arena.eqg.bak");
-	//rename("highpasshold.eqg", "highpasshold.eqg.bak");
-	//rename("nektulos.eqg", "nektulos.eqg.bak");
-	//rename("lavastorm.eqg", "lavastorm.eqg.bak");
 	InitOffsets();
 	GetEQPath(gszEQPath);
 	InitializeCriticalSection(&gDetourCS);
@@ -806,12 +854,12 @@ void InitHooks()
 	if (isMQInjectsEnabled) {
 		DebugSpew("Applying mq2 injects");
 		InitializeDisplayHook();
-		InitializeChatHook();
-		InitializeMQ2Commands();
+		//InitializeChatHook();
+		//InitializeMQ2Commands();
 		InitializeMQ2Pulse();
 		InitializeMQ2Spawns();
-		InitializeMapPlugin();
-		InitializeMQ2ItemDisplay();
+		//InitializeMapPlugin();
+		//InitializeMQ2ItemDisplay();
 		InitializeMQ2Labels();
 	}
 
@@ -819,34 +867,19 @@ void InitHooks()
 	InitOptions();
 
 	DWORD var = (((DWORD)0x008C4CE0 - 0x400000) + baseAddress);
-	/*
-		if (isCpuSpeedFixEnabled) {
 
+	// Fix Pet Rename Window 'Never Remind Me' button
+	// Replace reference to s_DisableNameChangeReminder with s_DisablePetNameChangeReminder
+	DWORD sourceAddress1 = (((DWORD)0x006fa88c - 0x400000) + baseAddress);
+	DWORD destinationAddress1 = (((DWORD)0x006fa60f - 0x400000) + baseAddress);
+	DWORD sourceAddress2 = (((DWORD)0x006fa88c - 0x400000) + baseAddress);
+	DWORD destinationAddress2 = (((DWORD)0x006fab62 - 0x400000) + baseAddress);
+	unsigned char buffer[5];
+	memcpy(buffer, (void*)sourceAddress1, 5);
+	PatchA((DWORD*)destinationAddress1, (char*)buffer, 5);
+	memcpy(buffer, (void*)sourceAddress2, 5);
+	PatchA((DWORD*)destinationAddress2, (char*)buffer, 5);
 
-			CPUID cpuID(0x80000007); // Get CPU vendor
-
-			bool isCandidate = false;
-			if ((cpuID.EDX() & (1 << 8)) != 0) {
-				DebugSpew("cpu has CMPXCHG8 enabled"); //https://en.wikipedia.org/wiki/CPUID CMPXCHG8 bitflag 8 on edx
-				isCandidate = true;
-			}
-
-			if (isCandidate && CalcCpuTicks_x && frequency_x) {
-				DebugSpew("cpu speed fix needed, applying trampoline");
-				CalcCpuTicks = FixOffset(CalcCpuTicks_x);
-				freq = reinterpret_cast<uint64_t*>(FixOffset(frequency_x)); // offset to low part of 64 bit var
-
-				// race here, hook CalcCpuTicks if we're early
-				// don't allow this to change in game because it will cause a freeze
-				EzDetourwName(CalcCpuTicks, &CalcCpuTicks_Detour, &CalcCpuTicks_Trampoline, "MQ2CpuSpeedFix_CalcCpuTicks");
-				if (gGameState != GAMESTATE_CHARSELECT && gGameState != GAMESTATE_INGAME) {
-					adjustFreq();
-				}
-			}
-			else {
-				DebugSpew("cpu is not candidate for speed fix");
-			}
-		} */
 	if (isHeroicDisabled) {
 		DebugSpew("disabling heroic stats");
 		var = (((DWORD)0x0044410C - 0x400000) + baseAddress);
@@ -895,6 +928,12 @@ void InitHooks()
 	if (isMaxHPFixEnabled) {
 		var = (((DWORD)0x00444158 - 0x400000) + baseAddress); // Fix max HP cap
 		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90", 12);
+
+		var = (((DWORD)0x00449E3B - 0x400000) + baseAddress);
+		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\x90\xE9\x1B\x01\x00\x00\x90", 13); // HP fix - the real deal
+
+		var = (((DWORD)0x00449F62 - 0x400000) + baseAddress); // HP fix - the real deal
+		PatchA((DWORD*)var, "\x90\x90", 2);
 
 		var = (((DWORD)0x00449F64 - 0x400000) + baseAddress); // Fix current HP cap
 		PatchA((DWORD*)var, "\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90", 13);
@@ -1078,8 +1117,9 @@ bool __cdecl MQ2Initialize()
 	ZeroMemory(szEQMappableCommands, sizeof(szEQMappableCommands));
 	for (i = 0; i < nEQMappableCommands; i++) {
 		if ((DWORD)EQMappableCommandList[i] == 0 ||
-			(DWORD)EQMappableCommandList[i] > (DWORD)__AC1_Data)
+			(DWORD)EQMappableCommandList[i] > (DWORD)__AC1_Data) {
 			continue;
+		}
 		szEQMappableCommands[i] = EQMappableCommandList[i];
 	}
 	gnNormalEQMappableCommands = i;
